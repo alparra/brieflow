@@ -31,7 +31,12 @@ fig.savefig(snakemake.output[0])
 _, fig = plot_mapping_vs_threshold(reads, barcodes, "Q_min", num_thresholds=10)
 fig.savefig(snakemake.output[1])
 
-fig = plot_read_mapping_heatmap(reads, barcodes, plate=snakemake.params.heatmap_plate, shape=snakemake.params.heatmap_shape)
+fig = plot_read_mapping_heatmap(
+    reads,
+    barcodes,
+    plate=snakemake.params.heatmap_plate,
+    shape=snakemake.params.heatmap_shape,
+)
 fig.savefig(snakemake.output[2])
 
 df_summary_one, fig = plot_cell_mapping_heatmap(
