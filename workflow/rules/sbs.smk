@@ -271,7 +271,9 @@ rule eval_mapping:
         heatmap_shape=config["sbs"]["heatmap_shape"]
         sort_by=config["sbs"]["sort_calls"],
         barcode_type=config["sbs"].get("barcode_type", "simple"),
-        sequencing_order=config["sbs"].get("sequencing_order", "map_recomb"),      
+        sequencing_order=config["sbs"].get("sequencing_order", "map_recomb"),       
+        heatmap_plate=config["sbs"]["heatmap_plate"],   
+        heatmap_shape=config["sbs"]["heatmap_shape"]
     script:
         "../scripts/sbs/eval_mapping.py"
 
