@@ -239,7 +239,8 @@ rule eval_segmentation_sbs:
     output:
         SBS_OUTPUTS_MAPPED["eval_segmentation_sbs"],
     params:
-        heatmap_shape="6W_sbs"
+        heatmap_plate=config["sbs"]["heatmap_plate"],   
+        heatmap_shape=config["sbs"]["heatmap_shape"]
     script:
         "../scripts/shared/eval_segmentation.py"
 
@@ -268,7 +269,9 @@ rule eval_mapping:
         SBS_OUTPUTS_MAPPED["eval_mapping"],
     params:
         df_barcode_library_fp=config["sbs"]["df_barcode_library_fp"],
-        sort_by=config["sbs"]["sort_calls"],      
+        sort_by=config["sbs"]["sort_calls"],   
+        heatmap_plate=config["sbs"]["heatmap_plate"],   
+        heatmap_shape=config["sbs"]["heatmap_shape"]
     script:
         "../scripts/sbs/eval_mapping.py"
 
