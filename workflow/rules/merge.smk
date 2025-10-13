@@ -111,6 +111,11 @@ rule eval_merge:
             metadata_combos=phenotype_wildcard_combos,
             ancient_output=True,
         ),
+    params: 
+        heatmap_plate_sbs=config["sbs"]["heatmap_plate"],   
+        heatmap_shape_sbs=config["sbs"]["heatmap_shape"],
+        heatmap_plate_ph=config["phenotype"]["heatmap_plate"],   
+        heatmap_shape_ph=config["phenotype"]["heatmap_shape"]
     output:
         MERGE_OUTPUTS_MAPPED["eval_merge"],
     script:
