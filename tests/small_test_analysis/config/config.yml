@@ -13,6 +13,10 @@
 all:
   root_fp: brieflow_output/
 preprocess:
+  sbs_data_format: "nd2"
+  sbs_data_organization: "tile"    
+  phenotype_data_format: "nd2" 
+  phenotype_data_organization: "tile"
   phenotype_channel_order: null
   phenotype_channel_order_flip: true
   phenotype_combo_fp: config/phenotype_combo.tsv
@@ -130,6 +134,12 @@ aggregate:
   perturbation_name_col: gene_symbol_0
   variance_or_ncomp: 0.99
   num_align_batches: 1
+  feature_normalization: mad
+  num_sims: 100
+  exclusion_string: null
+  bootstrap_combinations:
+  - cell_class: interphase
+    channel_combo: DAPI_COXIV_CENPA_WGA
 cluster:
   cluster_combo_fp: config/cluster_combo.tsv
   uniprot_data_fp: config/benchmark_clusters/uniprot_data.tsv
@@ -143,5 +153,5 @@ cluster:
     all: 3
     interphase: 3
     mitotic: 0
-  phate_distance_metric: cosine
+  phate_distance_metric: euclidean
   string_pair_benchmark_fp: config/benchmark_clusters/string_pair_benchmark.tsv
