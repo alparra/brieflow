@@ -11,14 +11,15 @@ from spotiflow.model import Spotiflow
 
 from lib.shared.image_utils import remove_channels
 
-    # --- helper ---
+
+# --- helper ---
 def _robust_z_per_channel(x, clip=8.0):
     # x: (..., Y, X) per-channel
-    med = np.median(x, axis=(-2,-1), keepdims=True)
-    mad = 1.4826*np.median(np.abs(x - med), axis=(-2,-1), keepdims=True) + 1e-6
+    med = np.median(x, axis=(-2, -1), keepdims=True)
+    mad = 1.4826 * np.median(np.abs(x - med), axis=(-2, -1), keepdims=True) + 1e-6
     z = (x - med) / mad
     return np.clip(z, 0, clip).astype(np.float32, copy=False)
-                                      
+
 
 def find_peaks(data, width=5, apply_normalization=False):
     """Find local maxima and label by difference to next-highest neighboring pixel.
@@ -35,30 +36,29 @@ def find_peaks(data, width=5, apply_normalization=False):
     """
     if apply_normalization:
         # -----------------
-        # EXTRA CODE TO DO INSTEAD OF STANDARD DEVIATION 
-        R = data.shape[0] # number of cycles  
+        # EXTRA CODE TO DO INSTEAD OF STANDARD DEVIATION
+        R = data.shape[0]  # number of cycles
         bases = data.astype(np.float32, copy=False)
 
         if R == 1:
             # per-channel robust normalization, then combine (L2)
-            z = _robust_z_per_channel(bases[0])                 # (4,Y,X)
-            detection_img = np.sqrt(np.sum(z*z, axis=0))        # (Y,X)
+            z = _robust_z_per_channel(bases[0])  # (4,Y,X)
+            detection_img = np.sqrt(np.sum(z * z, axis=0))  # (Y,X)
         else:
             # normalize per channel per cycle, then use across-cycle variability
-            z = _robust_z_per_channel(bases)                    # (R,4,Y,X)
+            z = _robust_z_per_channel(bases)  # (R,4,Y,X)
             detection_img = np.sqrt(np.var(z, axis=0).sum(axis=0))  # (Y,X)
         # -----------------
-    else: 
+    else:
         detection_img = data
 
     # If data is 2D, convert it to a list
     if detection_img.ndim == 2:
         detection_img = [detection_img]
-    
+
     # Find peaks in each image with a defined neighborhood size
     peaks = [
-        find_neighborhood_peaks(x, n=width) if x.max() > 0 else x
-        for x in detection_img
+        find_neighborhood_peaks(x, n=width) if x.max() > 0 else x for x in detection_img
     ]
 
     # Convert the list of peaks to a numpy array and squeeze it to remove singleton dimensions

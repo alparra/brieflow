@@ -14,7 +14,11 @@ if (method == "standard") or (method == "non_standard"):
     data = imread(snakemake.input[0])
 
     # Find peaks using standard method
-    peaks = find_peaks(data, width=params["peak_width"], apply_normalization=params["apply_normalization"])
+    peaks = find_peaks(
+        data,
+        width=params["peak_width"],
+        apply_normalization=params["apply_normalization"],
+    )
 
 elif method == "spotiflow":
     from lib.sbs.find_peaks import find_peaks_spotiflow
