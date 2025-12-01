@@ -28,7 +28,7 @@ def find_peaks(data, width=5, apply_normalization=False):
     Args:
         data (numpy.ndarray): 2D image data of sbs
         width (int, optional): Neighborhood size for finding local maxima. Default is 5.
-        remove_index (None or int, optional): Index of data to remove from subsequent analysis, generally any non-SBS channels (e.g., DAPI).
+        apply_normalization: if True, perform normalization since standard deviation has not been applied upstream
 
     Returns:
         peaks (numpy.ndarray): Local maxima scores, dimensions same as data. At a maximum, the value is max - min in the defined neighborhood, elsewhere zero.
