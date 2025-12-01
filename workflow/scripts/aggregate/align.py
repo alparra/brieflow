@@ -39,6 +39,8 @@ sample_df = sample_df.to_pandas(use_threads=True, memory_pool=None)
 
 # load sample df as pandas dataframe
 metadata_cols = load_metadata_cols(snakemake.params.metadata_cols_fp, True)
+
+sample_df = sample_df.dropna(axis=1)
 metadata, features = split_cell_data(sample_df, metadata_cols)
 metadata, features = prepare_alignment_data(
     metadata,
