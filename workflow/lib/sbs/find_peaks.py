@@ -33,7 +33,6 @@ def find_peaks(data, width=5, apply_normalization=False):
     Returns:
         peaks (numpy.ndarray): Local maxima scores, dimensions same as data. At a maximum, the value is max - min in the defined neighborhood, elsewhere zero.
     """
-
     if apply_normalization:
         # -----------------
         # EXTRA CODE TO DO INSTEAD OF STANDARD DEVIATION 
