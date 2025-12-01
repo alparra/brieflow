@@ -11,32 +11,55 @@ from spotiflow.model import Spotiflow
 
 from lib.shared.image_utils import remove_channels
 
+    # --- helper ---
+def _robust_z_per_channel(x, clip=8.0):
+    # x: (..., Y, X) per-channel
+    med = np.median(x, axis=(-2,-1), keepdims=True)
+    mad = 1.4826*np.median(np.abs(x - med), axis=(-2,-1), keepdims=True) + 1e-6
+    z = (x - med) / mad
+    return np.clip(z, 0, clip).astype(np.float32, copy=False)
+                                      
 
-def find_peaks(standard_deviation_data, width=5, remove_index=None):
+def find_peaks(data, width=5, apply_normalization=False):
     """Find local maxima and label by difference to next-highest neighboring pixel.
 
     Conventionally used to estimate SBS read locations by inputting the standard deviation score.
 
     Args:
-        standard_deviation_data (numpy.ndarray): 2D image data of sbs standard deviation.
+        data (numpy.ndarray): 2D image data of sbs
         width (int, optional): Neighborhood size for finding local maxima. Default is 5.
         remove_index (None or int, optional): Index of data to remove from subsequent analysis, generally any non-SBS channels (e.g., DAPI).
 
     Returns:
         peaks (numpy.ndarray): Local maxima scores, dimensions same as data. At a maximum, the value is max - min in the defined neighborhood, elsewhere zero.
     """
-    # Remove specified index channel if needed
-    if remove_index is not None:
-        standard_deviation_data = remove_channels(standard_deviation_data, remove_index)
+
+    if apply_normalization:
+        # -----------------
+        # EXTRA CODE TO DO INSTEAD OF STANDARD DEVIATION 
+        R = data.shape[0] # number of cycles  
+        bases = data.astype(np.float32, copy=False)
+
+        if R == 1:
+            # per-channel robust normalization, then combine (L2)
+            z = _robust_z_per_channel(bases[0])                 # (4,Y,X)
+            detection_img = np.sqrt(np.sum(z*z, axis=0))        # (Y,X)
+        else:
+            # normalize per channel per cycle, then use across-cycle variability
+            z = _robust_z_per_channel(bases)                    # (R,4,Y,X)
+            detection_img = np.sqrt(np.var(z, axis=0).sum(axis=0))  # (Y,X)
+        # -----------------
+    else: 
+        detection_img = data
 
     # If data is 2D, convert it to a list
-    if standard_deviation_data.ndim == 2:
-        standard_deviation_data = [standard_deviation_data]
-
+    if detection_img.ndim == 2:
+        detection_img = [detection_img]
+    
     # Find peaks in each image with a defined neighborhood size
     peaks = [
         find_neighborhood_peaks(x, n=width) if x.max() > 0 else x
-        for x in standard_deviation_data
+        for x in detection_img
     ]
 
     # Convert the list of peaks to a numpy array and squeeze it to remove singleton dimensions

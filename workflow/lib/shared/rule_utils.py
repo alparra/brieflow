@@ -105,10 +105,15 @@ def get_spot_detection_params(config: Dict[str, Any]) -> Dict[str, Any]:
     # Common parameters for all methods
     params = {
         "method": method,
+        "peak_width": module_config.get("peak_width", 3),
+        "apply_normalization": method == "non_standard",
     }
 
     # Method-specific parameters
     if method == "standard":
+        # No additional parameters needed for standard method
+        pass
+    elif method == "non_standard":
         # No additional parameters needed for standard method
         pass
     elif method == "spotiflow":
@@ -125,7 +130,7 @@ def get_spot_detection_params(config: Dict[str, Any]) -> Dict[str, Any]:
         )
     else:
         raise ValueError(
-            f"Unknown spot detection method: {method}. Choose one of: standard, spotiflow"
+            f"Unknown spot detection method: {method}. Choose one of: standard, non_standard, spotiflow"
         )
 
     return params
