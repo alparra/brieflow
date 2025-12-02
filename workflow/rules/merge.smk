@@ -262,10 +262,10 @@ rule eval_merge:
             ancient_output=True,
         ),
     params: 
-        heatmap_plate_sbs=config["sbs"]["heatmap_plate"],   
-        heatmap_shape_sbs=config["sbs"]["heatmap_shape"],
-        heatmap_plate_ph=config["phenotype"]["heatmap_plate"],   
-        heatmap_shape_ph=config["phenotype"]["heatmap_shape"]
+        heatmap_plate_sbs=config["sbs"].get("heatmap_plate", "6W"),  
+        heatmap_shape_sbs=config["sbs"].get("heatmap_shape", "6W_sbs"),
+        heatmap_plate_ph=config["phenotype"].get("heatmap_plate", "6W"), 
+        heatmap_shape_ph=config["phenotype"].get("heatmap_shape", "6W_ph"),
     output:
         cell_mapping_stats=MERGE_OUTPUTS_MAPPED["eval_merge"][0],
         sbs_to_ph_matching_rates_tsv=MERGE_OUTPUTS_MAPPED["eval_merge"][1],
