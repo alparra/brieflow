@@ -50,11 +50,18 @@ rule compute_standard_deviation:
 
 
 # Find local maxima of SBS reads across cycles
-# modified this code because test data only had 1 cycle
+
+# modified this code because test data only had 1 cycle, so need to use different normalization
+spot_method = onfig["sbs"]["spot_detection_method"]
+peak_inputs = {
+    "standard": SBS_OUTPUTS["compute_standard_deviation"],
+    "non_standard": SBS_OUTPUTS_MAPPED["max_filter"],
+    "align":    SBS_OUTPUTS["align_sbs"]
+}
+
 rule find_peaks:
     input:
-        #SBS_OUTPUTS["compute_standard_deviation"] if config["sbs"]["spot_detection_method"] == "standard" else SBS_OUTPUTS["align_sbs"],
-        SBS_OUTPUTS_MAPPED["max_filter"],
+        peak_inputs[spot_method],
     output:
         SBS_OUTPUTS_MAPPED["find_peaks"],
     params:
