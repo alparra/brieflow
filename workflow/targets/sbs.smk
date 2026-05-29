@@ -180,7 +180,7 @@ SBS_OUTPUTS = {
 }
 
 SBS_OUTPUT_MAPPINGS = {
-    "align_sbs": temp,
+    "align_sbs": None,
     "log_filter": temp,
     "compute_standard_deviation": temp,
     "find_peaks": temp,
@@ -188,7 +188,7 @@ SBS_OUTPUT_MAPPINGS = {
     "apply_ic_field_sbs": temp,
     "segment_sbs": None,
     "extract_bases": temp,
-    "call_reads": temp,
+    "call_reads": None,
     "call_cells": temp,
     "extract_sbs_info": temp,
     "combine_reads": None,

@@ -269,6 +269,358 @@ def call_cells(
 
     return df_cells
 
+def call_cells_v2(
+        df_reads,
+        library_lookup,
+        alpha=1.5,
+        max_pair_dist=2,
+        max_assign_dist=1):
+    
+    import numpy as np
+    import pandas as pd
+    from functools import lru_cache
+
+    # 1. Distance + scoring utilities
+    def hamming(a, b):
+        """Hamming distance for equal-length strings"""
+        return sum(x != y for x, y in zip(a, b))
+
+    @lru_cache(None)
+    def exp_score(d, alpha=1.5):
+        """Soft penalty for sequencing errors"""
+        return np.exp(-alpha * d)
+
+
+    # 2. Pair-aware scoring
+    def score_pair(cell_reads, pair, alpha=1.5, max_dist=2):
+        """
+        Score how well a library barcode pair explains
+        all barcode observations in a cell.
+        """
+        b1, b2 = pair
+        score = 0.0
+
+        for bc in cell_reads["barcode"]:
+            d1 = hamming(bc, b1)
+            d2 = hamming(bc, b2)
+            d = min(d1, d2)
+
+            if d <= max_dist:
+                score += exp_score(d, alpha)
+
+        return score
+
+    # 3. Assign best library pair per cell
+    def assign_cell(cell_reads, lib_pairs, alpha=1.5, max_dist=2):
+        scores = np.array([
+            score_pair(cell_reads, pair, alpha, max_dist)
+            for pair in lib_pairs
+        ])
+
+        best_idx = np.argmax(scores)
+        best_pair = lib_pairs[best_idx]
+        best_score = scores[best_idx]
+
+        # Confidence metric (score separation)
+        sorted_scores = np.sort(scores)
+        confidence = (
+            sorted_scores[-1] / (sorted_scores[-2] + 1e-6)
+            if len(sorted_scores) > 1 else np.inf
+        )
+
+        return {
+            "iBar1": best_pair[0],
+            "iBar2": best_pair[1],
+            "score": best_score,
+            "confidence": confidence
+        }
+
+    # 4. Extract corrected barcodes per cell
+    def extract_corrected_barcodes(cell_reads, assigned_pair, max_dist=1):
+        """
+        Assign each observed barcode to one of the two
+        library barcodes if within max_dist.
+        """
+        b1 = assigned_pair["iBar1"]
+        b2 = assigned_pair["iBar2"]
+
+        assigned = []
+
+        for bc in cell_reads["barcode"]:
+            d1 = hamming(bc, b1)
+            d2 = hamming(bc, b2)
+
+            if min(d1, d2) <= max_dist:
+                assigned.append(b1 if d1 <= d2 else b2)
+
+        return assigned
+
+    # 5. Full CropSeqMulti optical barcode assignment
+    lib_pairs = list(library_lookup.keys())  # library_lookup is a dict mapping (iBar1, iBar2) to gene symbol
+
+    results = []
+    for cell, cell_reads in df_reads.groupby("cell"):
+        assignment = assign_cell(
+            cell_reads,
+            lib_pairs,
+            alpha=alpha,
+            max_dist=max_pair_dist
+        )
+
+        corrected_bcs = extract_corrected_barcodes(
+            cell_reads,
+            assignment,
+            max_dist=max_assign_dist
+        )
+
+        bc_counts = (
+            pd.Series(corrected_bcs)
+            .value_counts()
+            .to_dict()
+        )
+
+        results.append({
+            "plate": cell_reads.iloc[0]["plate"],
+            "well": cell_reads.iloc[0]["well"],
+            "tile": cell_reads.iloc[0]["tile"],
+            "cell": cell,
+            "iBar1": assignment["iBar1"],
+            "iBar2": assignment["iBar2"],
+            "score": assignment["score"],
+            "confidence": assignment["confidence"],
+            "barcode_counts": bc_counts,
+            "n_spots": len(cell_reads),
+            "n_explained_spots": sum(bc_counts.values())
+        })
+
+    df_assignments = pd.DataFrame(results)
+
+    # finally we can merge back to the original df_reads to get tile/well info and quality metrics
+    def extract_pair_counts(barcode_counts, iBar1, iBar2):
+        c0 = barcode_counts.get(iBar1, 0)
+        c1 = barcode_counts.get(iBar2, 0)
+        total = c0 + c1
+        return c0, c1, total
+
+    cell_rows = []
+
+    for _, r in df_assignments.iterrows():
+        c0, c1, total = extract_pair_counts(
+            r.barcode_counts, r.iBar1, r.iBar2
+        )
+
+        g0 = library_lookup.get((r.iBar1, r.iBar2), None)
+
+        cell_rows.append({
+            "plate": r.plate,
+            "well": r.well,
+            "tile": r.tile,
+            "cell": r.cell,
+
+            "cell_barcode_0": r.iBar1,
+            "cell_barcode_count_0": c0,
+
+            "cell_barcode_1": r.iBar2,
+            "cell_barcode_count_1": c1,
+
+            "barcode_count": total,
+            "barcode_peak_0": c0 / total if total else 0.0,
+            "barcode_peak_1": c1 / total if total else 0.0,
+
+            "gene_symbol_0": g0,
+            "gene_symbol_1": g0,
+
+            "mapped_0": c0 > 0,
+            "mapped_1": c1 > 0,
+        })
+
+
+    return pd.DataFrame(cell_rows)
+
+
+def call_cells_v3(
+    df_reads_,
+    library_lookup,
+    alpha=1.5,
+    max_pair_dist=2,
+    max_assign_dist=1,
+    group_cols=("tile", "cell"),
+    q_min=0,
+    max_q_mismatches = 1,
+    max_n_reads_in_cell = 20,
+    max_n_unexplained_spots_in_cell = 2,
+    min_n_spots_in_cell = 2
+):
+    """
+    Assign reads to the best barcode pair per cell using Hamming-distance-weighted scores.
+    df_reads: DataFrame of individual reads; must contain a 'barcode' column and the grouping columns.
+    library_lookup: iterable/list of (b1, b2) barcode pair tuples representing the library.
+    alpha: exponential penalty factor for pair distance (higher -> stronger penalty).
+    max_pair_dist: max Hamming distance considered when scoring pair contributions.
+    max_assign_dist: max Hamming distance allowed when assigning a read to one of the pair barcodes.
+    group_cols: tuple of column names used to group reads into cells (prevents cross-tile mixing).
+    q_min: minimum q value for a read to be valid 
+    max_q_mismatches: how many letters in the code are allowed to be lower than q_min
+    max_n_reads_in_cell: cells with number of reads higher than this value will be discarded - consider them wrong in some way, maybe segmentation did not work and it merged several together
+    """
+    lib_pairs = list(library_lookup)
+    n_pairs = len(lib_pairs) # library length
+    group_cols = list(group_cols)
+
+    # Precompute exponential penalties
+    exp_pair = np.exp(-alpha * np.arange(max_pair_dist + 1))
+
+    # Cache: barcode -> (pair_indices, contribution_values)
+    pair_score_cache = {}
+
+    # Filter reads by quality: keep only those with at most max_q_mismatches positions with Q < q_min
+    mask = df_reads_.apply(lambda row: sum(1 for i in range(15) if f'Q_{i}' in row and row[f'Q_{i}'] < q_min) <= max_q_mismatches, axis=1)
+    df_reads = df_reads_[mask]
+    
+    # Filter out cells with excessive amount of reads (likely wrongful detection)
+    reads_per_cell = df_reads.groupby(group_cols).size()
+    cells_to_keep = reads_per_cell[reads_per_cell <= max_n_reads_in_cell].index
+    df_reads = df_reads.set_index(group_cols).loc[cells_to_keep].reset_index()
+
+    def hamming(a, b):
+        return sum(c1 != c2 for c1, c2 in zip(a, b))
+
+    def get_pair_score_sparse(bc):
+        """
+        Returns sparse pair contribution vector for barcode `bc`.
+        """
+        cached = pair_score_cache.get(bc)
+        if cached is not None:
+            return cached
+
+        idx = []
+        vals = []
+
+        for k, (b1, b2) in enumerate(lib_pairs):
+            d = min(hamming(bc, b1), hamming(bc, b2))
+            if d <= max_pair_dist:
+                idx.append(k)
+                vals.append(exp_pair[d])
+
+        idx = np.array(idx, dtype=np.int32)
+        vals = np.array(vals, dtype=np.float32)
+
+        pair_score_cache[bc] = (idx, vals)
+        return idx, vals
+
+    # Iterate for each cell 
+    #    i.e.roup by plate + well + tile + cell to avoid cross-tile collisions
+    results = []
+
+    for keys, grp in df_reads.groupby(group_cols, sort=False):
+
+        if isinstance(keys, tuple):
+            key_dict = dict(zip(group_cols, keys))
+        else:
+            key_dict = {group_cols[0]: keys}
+
+        # Extract all found barcodes in a cell and count how many times each of them
+        obs = grp["barcode"].to_numpy()
+        uniq, counts = np.unique(obs, return_counts=True)
+
+        scores = np.zeros(n_pairs, dtype=float)
+
+        # Accumulate contributions per unique barcode
+        for bc, ct in zip(uniq, counts):
+            idx, vals = get_pair_score_sparse(bc)
+            if len(idx) > 0:
+                scores[idx] += ct * vals
+
+        # Best pair
+        best_idx = int(np.argmax(scores))
+        best_pair = lib_pairs[best_idx]
+        best_score = float(scores[best_idx])
+
+        if n_pairs > 1:
+            top2 = np.partition(scores, -2)[-2:]
+            confidence = float(top2.max() / (top2.min() + 1e-6))
+        else:
+            confidence = np.inf
+
+        # Corrected barcode assignment (reuse distances minimally)
+        b1, b2 = best_pair
+        corrected_counts = {}
+        explained = 0
+
+        for bc, ct in zip(uniq, counts):
+            d1 = hamming(bc, b1)
+            d2 = hamming(bc, b2)
+
+            if min(d1, d2) <= max_assign_dist:
+                assigned = b1 if d1 <= d2 else b2
+                corrected_counts[assigned] = (
+                    corrected_counts.get(assigned, 0) + int(ct)
+                )
+                explained += int(ct)
+        
+        n_spots = int(len(obs))
+        # Discard cell if not enough explained spots 
+        if explained < min_n_spots_in_cell:
+            continue
+        # Discard cell if too many unexplained spots, given the assigned barcode pair
+        if n_spots - explained > max_n_unexplained_spots_in_cell: 
+            continue
+
+        results.append({
+            "plate": grp.iloc[0]["plate"],
+            "well": grp.iloc[0]["well"],
+            "tile": grp.iloc[0]["tile"],
+            "cell": grp.iloc[0]["cell"],
+            "iBar1": b1,
+            "iBar2": b2,
+            "score": best_score,
+            "confidence": confidence,
+            "barcode_counts": corrected_counts,
+            "n_spots": n_spots,
+            "n_explained_spots": int(explained),
+        })
+
+    df_assignments = pd.DataFrame(results)
+    
+    # finally we can merge back to the original df_reads to get tile/well info and quality metrics
+    def extract_pair_counts(barcode_counts, iBar1, iBar2):
+        c0 = barcode_counts.get(iBar1, 0)
+        c1 = barcode_counts.get(iBar2, 0)
+        total = c0 + c1
+        return c0, c1, total
+
+    cell_rows = []
+
+    for _, r in df_assignments.iterrows():
+        c0, c1, total = extract_pair_counts(
+            r.barcode_counts, r.iBar1, r.iBar2
+        )
+
+        g0 = library_lookup.get((r.iBar1, r.iBar2), None)
+
+        cell_rows.append({
+            "plate": r.plate,
+            "well": r.well,
+            "tile": int(r.tile),
+            "cell": int(r.cell),
+
+            "cell_barcode_0": r.iBar1,
+            "cell_barcode_count_0": c0,
+
+            "cell_barcode_1": r.iBar2,
+            "cell_barcode_count_1": c1,
+            "barcode_count": total,
+
+            "gene_symbol_0": g0,
+            "gene_symbol_1": g0,
+
+            "mapped_0": c0 > 0,
+            "mapped_1": c1 > 0,
+        })
+
+
+    return pd.DataFrame(cell_rows)
+
 
 def _get_empty_output():
     """Return empty DataFrame with standardized column names for empty input handling."""

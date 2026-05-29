@@ -5,7 +5,7 @@ Supports both single-barcode and multi-barcode protocols.
 
 import pandas as pd
 
-from lib.sbs.call_cells import call_cells, prep_multi_reads
+from lib.sbs.call_cells import call_cells, prep_multi_reads, call_cells_v2, call_cells_v3
 
 # Get configuration from params
 params = snakemake.params.config
@@ -48,6 +48,21 @@ if barcode_type == "multi":
         max_distance=params["max_distance"],
         barcode_info_cols=params["barcode_info_cols"],
     )
+elif barcode_type == "dual": 
+    lib_lookup = {(row.prefix_map, row.prefix_recomb): row.gene_symbol for _, row in df_barcode_library.iterrows()}
+    
+    cells_data = call_cells_v3(
+        df_reads_=reads_data,
+        library_lookup=lib_lookup,
+        alpha=params["alpha"],
+        max_pair_dist=params["max_pair_dist"],
+        max_assign_dist=params["max_assign_dist"],
+        q_min=params["q_min"],
+        max_q_mismatches=params["max_q_mismatches"],
+        max_n_reads_in_cell=params["max_n_reads_in_cell"],
+        max_n_unexplained_spots_in_cell=params["max_n_unexplained_spots_in_cell"],
+        min_n_spots_in_cell=params["min_n_spots_in_cell"]
+        )
 else:
     # Simple barcode mode: call cells directly
     cells_data = call_cells(
