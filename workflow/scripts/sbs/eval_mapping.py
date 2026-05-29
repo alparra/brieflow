@@ -17,6 +17,8 @@ if snakemake.params.barcode_type == "multi":
     barcodes = get_barcode_list(
         df_barcode_library, sequencing_order=snakemake.params.sequencing_order
     )
+elif snakemake.params.barcode_type == "dual":
+    barcodes = list(df_barcode_library.prefix_map) + list(df_barcode_library.prefix_recomb)
 else:
     barcodes = get_barcode_list(df_barcode_library)
 

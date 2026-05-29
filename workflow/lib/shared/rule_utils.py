@@ -504,6 +504,25 @@ def get_call_cells_params(config: Dict[str, Any]) -> Dict[str, Any]:
                 "recomb_end": None,
             }
         )
+    elif barcode_type == "dual":
+        # Dual-barcode parameters
+        params.update(
+            {
+                "alpha": sbs_config.get("alpha", 1.5),
+                "max_pair_dist": sbs_config.get("max_pair_dist", 2),
+                "max_assign_dist": sbs_config.get("max_assign_dist", 1),
+                "q_min": sbs_config.get("q_min", 0.),
+                "max_q_mismatches": sbs_config.get("max_q_mismatches", 1),
+                "max_n_reads_in_cell": sbs_config.get("max_n_reads_in_cell", 100),
+                "max_n_unexplained_spots_in_cell": sbs_config.get("max_n_unexplained_spots_in_cell", 10),
+                "min_n_spots_in_cell": sbs_config.get("min_n_spots_in_cell", 1),
+                # Multi-barcode params explicitly None for clarity
+                "map_start": None,
+                "map_end": None,
+                "recomb_start": None,
+                "recomb_end": None,
+            }
+        )
     elif barcode_type == "multi":
         # Multi-barcode parameters
         params.update(
@@ -522,7 +541,7 @@ def get_call_cells_params(config: Dict[str, Any]) -> Dict[str, Any]:
         )
     else:
         raise ValueError(
-            f"Invalid barcode_type: '{barcode_type}'. Must be 'simple' or 'multi'"
+            f"Invalid barcode_type: '{barcode_type}'. Must be 'simple', 'dual', or 'multi'"
         )
 
     return params
